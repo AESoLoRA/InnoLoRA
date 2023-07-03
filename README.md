@@ -31,3 +31,7 @@ If you want to make an update to the project, please, create a new branch and se
 
 
 ### 2.3. Code generation models ###
+
+[Polycoder](https://github.com/VHellendoorn/Code-LMs) - code generation pretrained model + dataset collection scripts
+
+[Codex](https://platform.openai.com/docs/guides/code) - Web inteface only
