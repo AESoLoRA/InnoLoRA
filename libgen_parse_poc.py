@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 import os
 import urllib.request
 from socket import timeout
@@ -17,36 +17,61 @@ def filename(s: str) -> str:
     return ''.join(c for c in s if c.isalnum() or c in "-_ .")
 
 
-def try_download(name: str, urls: List[str]) -> None:
-    # A-la `mkdir -p`
-    try:
-        os.mkdir('books')
-    except FileExistsError:
-        pass
+class DomainAwareDownloader:
+    def __init__(self):
+        self.fails: Dict[str, int] = {}
+        self.trust_threshold = 2
 
-    data = None
-    for url in urls:
+    @staticmethod
+    def domain(s: str) -> str:
+        return '/'.join(s.split('/')[:3])
+
+    def reorder_urls(self, urls: List[str]) -> List[str]:
+        urls_trusteds = [
+                (url, bool(self.fails.get(self.domain(url), 0) < self.trust_threshold))
+                for url in urls
+            ]
+        trusted_urls = [url for url, is_trusted in urls_trusteds if is_trusted]
+        untrusted_urls = [url for url, is_trusted in urls_trusteds if not is_trusted]
+        return trusted_urls + untrusted_urls
+
+    def try_download(self, name: str, urls: List[str]) -> None:
+        # A-la `mkdir -p`
         try:
-            with urllib.request.urlopen(url, timeout=5) as conn:
-                data = conn.read()
-        except urllib.error.URLError as e:
-            # I only want to catch actual timeout errors here. But can't specify
-            # that in the `except` because `urllib` wraps the actual error in its
-            # own type...
-            if not isinstance(e.reason, TimeoutError):
-                raise
+            os.mkdir('books')
+        except FileExistsError:
+            pass
 
-            continue
-        else:
-            break
+        urls = self.reorder_urls(urls)
 
-    if not data:
-        raise RuntimeError(f'No mirror worked for "{name}", '
-                           'or the book is too large, increase timeout')
+        data = None
+        for url in urls:
+            try:
+                with urllib.request.urlopen(url, timeout=5) as conn:
+                    data = conn.read()
+            except urllib.error.URLError as e:
+                # I only want to catch actual timeout errors here. But can't specify
+                # that in the `except` because `urllib` wraps the actual error in its
+                # own type...
+                if not isinstance(e.reason, TimeoutError):
+                    raise
 
-    name = filename(name)
-    with open(f'books/{name}', 'wb') as f:
-        f.write(data)
+                domain = self.domain(url)
+                self.fails[domain] = 1 + self.fails.get(domain, 0)
+                continue
+            except TimeoutError:
+                # This one occurs when the timeout is specifically in the _read_ opration.
+                print(f'The mirror {url} was reached but failed to read from...')
+                continue
+            else:
+                break
+
+        if not data:
+            raise RuntimeError(f'No mirror worked for "{name}"')
+
+        name = filename(name)
+        with open(f'books/{name}', 'wb') as f:
+            f.write(data)
 
 
 def get_librarylol_downloadables(s: str) -> List[str]:
@@ -63,6 +88,8 @@ if __name__ == '__main__':
         exact_match=False  # Extremely misleading but must specify this for post-search filter
     )
 
+    downloader = DomainAwareDownloader()
     for res in tqdm(ress):
         assert res.mirror_1.startswith('http://library.lol/')
-        try_download(res.title, get_librarylol_downloadables(res.mirror_1))
+        downloader.try_download(res.title, get_librarylol_downloadables(res.mirror_1))
+    print('FYI, detected failures:', downloader.fails)
