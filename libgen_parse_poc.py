@@ -12,6 +12,8 @@ from bs4 import BeautifulSoup
 # TODO: patch it to have a reasonable timeout and raise a descriptive exception.
 fetch.LIBGEN_URL = 'https://libgen.is/search.php?'
 
+FETCH_EXT = 'pdf'
+
 
 def filename(s: str) -> str:
     return ''.join(c for c in s if c.isalnum() or c in "-_ .")
@@ -70,7 +72,7 @@ class DomainAwareDownloader:
             raise RuntimeError(f'No mirror worked for "{name}"')
 
         name = filename(name)
-        with open(f'books/{name}', 'wb') as f:
+        with open(f'books/{name}.{FETCH_EXT}', 'wb') as f:
             f.write(data)
 
 
@@ -84,7 +86,7 @@ def get_librarylol_downloadables(s: str) -> List[str]:
 if __name__ == '__main__':
     req = Request('Haskell programming', num_results=1000)
     ress = search(req).filter(
-        {'Extension': 'epub'},
+        {'Extension': FETCH_EXT},
         exact_match=False  # Extremely misleading but must specify this for post-search filter
     )
 
