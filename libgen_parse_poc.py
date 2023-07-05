@@ -1,7 +1,9 @@
 from typing import List, Dict
 import os
 import urllib.request
+from urllib.error import URLError, HTTPError
 from socket import timeout
+from sys import stderr
 
 from tqdm import tqdm
 from libgen_api import Request, search, fetch
@@ -42,23 +44,19 @@ class DomainAwareDownloader:
 
         data = None
         for url in urls:
+            domain = self.domain(url)
             try:
                 with urllib.request.urlopen(url, timeout=5) as conn:
                     data = conn.read()
-            except urllib.error.URLError as e:
-                # I only want to catch actual timeout errors here. But can't specify
-                # that in the `except` because `urllib` wraps the actual error in its
-                # own type...
-                if not isinstance(e.reason, TimeoutError):
-                    raise
-
-                domain = self.domain(url)
+            except (URLError, HTTPError) as e:
+                print(f'\rSkipped mirror {domain} for: {e.reason}', file=stderr)
                 self.fails[domain] = 1 + self.fails.get(domain, 0)
-                continue
-            except TimeoutError:
+            except timeout:
                 # This one occurs when the timeout is specifically in the _read_ opration.
-                print(f'The mirror {url} was reached but failed to read from...')
-                continue
+                print(f'\rThe mirror {domain} was reached but failed to read from...', file=stderr)
+            except Exception as e:
+                print(f'\rUnexpected exception: {e} (type {type(e)}) when trying {domain}. '
+                      'Will try another mirror...', file=stderr)
             else:
                 break
 
@@ -87,5 +85,8 @@ if __name__ == '__main__':
     downloader = DomainAwareDownloader()
     for res in tqdm(ress):
         assert res.mirror_1.startswith('http://library.lol/')
-        downloader.try_download(res.title, get_librarylol_downloadables(res.mirror_1))
+        try:
+            downloader.try_download(res.title, get_librarylol_downloadables(res.mirror_1))
+        except RuntimeError as e:
+            print(f'Exception with {res.title}:', e, file=stderr)
     print('FYI, detected failures:', downloader.fails)
