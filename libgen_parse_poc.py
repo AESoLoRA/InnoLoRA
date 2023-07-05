@@ -29,13 +29,7 @@ class DomainAwareDownloader:
         return '/'.join(s.split('/')[:3])
 
     def reorder_urls(self, urls: List[str]) -> List[str]:
-        urls_trusteds = [
-                (url, bool(self.fails.get(self.domain(url), 0) < self.trust_threshold))
-                for url in urls
-            ]
-        trusted_urls = [url for url, is_trusted in urls_trusteds if is_trusted]
-        untrusted_urls = [url for url, is_trusted in urls_trusteds if not is_trusted]
-        return trusted_urls + untrusted_urls
+        return sorted(urls, key=lambda u: self.fails.get(self.domain(u), 0))
 
     def try_download(self, name: str, urls: List[str]) -> None:
         # A-la `mkdir -p`
