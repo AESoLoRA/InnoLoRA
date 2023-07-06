@@ -1,0 +1,8 @@
+# Libgen interaction
+git+https://github.com/maxsu/libgen-api
+
+# Progress bar
+tqdm
+
+# HTML parsing
+BeautifulSoup4
